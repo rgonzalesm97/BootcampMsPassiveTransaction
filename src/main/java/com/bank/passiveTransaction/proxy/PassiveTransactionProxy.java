@@ -4,6 +4,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import com.bank.passiveTransaction.model.History;
 import com.bank.passiveTransaction.model.Account;
 
 import reactor.core.publisher.Mono;
@@ -28,5 +29,16 @@ public class PassiveTransactionProxy {
 				.body(BodyInserters.fromValue(account))
 				.retrieve()
 				.bodyToMono(Account.class);
+	}
+	
+	public void saveHistory(History history) {
+		webClientBuilder.build()
+						.post()
+						.uri("http://localhost:8090/history")
+						.contentType(MediaType.APPLICATION_JSON)
+						.body(BodyInserters.fromValue(history))
+						.retrieve()
+						.bodyToMono(History.class)
+						.subscribe();
 	}
 }
