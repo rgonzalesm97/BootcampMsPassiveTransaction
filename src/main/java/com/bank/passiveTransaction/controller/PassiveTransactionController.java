@@ -1,18 +1,15 @@
 package com.bank.passiveTransaction.controller;
 
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.bank.passiveTransaction.model.Account;
 import com.bank.passiveTransaction.service.PassiveTransactionService;
 
 import lombok.RequiredArgsConstructor;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @RestController
@@ -21,10 +18,21 @@ import reactor.core.publisher.Mono;
 public class PassiveTransactionController {
 	
 	private final PassiveTransactionService passiveTransactionService;
-
-	@GetMapping
-	public String test() {
-		return "hello world";
+	
+	@PostMapping("/deposit/{id}")
+	public Mono<Account> deposit(@PathVariable("id") String idProduct,
+								@RequestParam Double amount) {
+		
+		return passiveTransactionService.depositIntoAccount(idProduct, amount).switchIfEmpty(Mono.just(new Account()));
+		
+	}
+	
+	@PostMapping("/withdraw/{id}")
+	public Mono<Account> withdraw(@PathVariable("id") String idProduct,
+								@RequestParam Double amount) {
+		
+		return passiveTransactionService.withdrawFromAccount(idProduct, amount).switchIfEmpty(Mono.just(new Account()));
+		
 	}
 	
 }

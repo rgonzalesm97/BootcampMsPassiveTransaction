@@ -1,23 +1,51 @@
 package com.bank.passiveTransaction.service.impl;
 
 import org.springframework.stereotype.Service;
-import org.springframework.web.reactive.function.client.WebClient;
 
+import com.bank.passiveTransaction.model.Account;
+import com.bank.passiveTransaction.proxy.PassiveTransactionProxy;
 import com.bank.passiveTransaction.service.PassiveTransactionService;
 
-import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Mono;
 
-@AllArgsConstructor
-@RequiredArgsConstructor
 @Service
+@RequiredArgsConstructor
 public class PassiveTransactionServiceImpl implements PassiveTransactionService{
 	
-	private WebClient productClient = WebClient.builder().baseUrl("http://localhost:8081/product").build();
-	
+	private PassiveTransactionProxy passiveTransactionProxy = new PassiveTransactionProxy();
+
 	@Override
-	public void deposit(String idProduct, Long amount) {
+	public Mono<Account> depositIntoAccount(String idAccount, Double amount) {
 		
+		Mono<Account> actualAccount = passiveTransactionProxy.getAccount(idAccount);
+		
+		return actualAccount.flatMap(x -> {
+			if(x.getMonthlyMovements()>0) {
+				x.setMonthlyMovements(x.getMonthlyMovements()-1);
+				x.setBalance(x.getBalance() + amount);
+
+				return passiveTransactionProxy.updateAccount(x);
+			}else {
+				return Mono.empty();
+			}
+		});
 	}
-	
+
+	@Override
+	public Mono<Account> withdrawFromAccount(String idAccount, Double amount) {
+		
+		Mono<Account> actualAccount = passiveTransactionProxy.getAccount(idAccount);
+		
+		return actualAccount.flatMap(x -> {
+			if(x.getMonthlyMovements()>0 && x.getBalance()>=amount) {
+				x.setMonthlyMovements(x.getMonthlyMovements()-1);
+				x.setBalance(x.getBalance()-amount);
+				
+				return passiveTransactionProxy.updateAccount(x);
+			}else {
+				return Mono.empty();
+			}
+		});
+	}
 }
