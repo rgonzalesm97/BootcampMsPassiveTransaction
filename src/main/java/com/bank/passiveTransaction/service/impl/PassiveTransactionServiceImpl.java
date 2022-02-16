@@ -26,8 +26,8 @@ public class PassiveTransactionServiceImpl implements PassiveTransactionService{
 		return actualAccount.flatMap(x -> {
 			if(x.getMonthlyMovements()>0) {
 				x.setMonthlyMovements(x.getMonthlyMovements()-1);
-				x.setBalance(x.getBalance() + amount);
-
+				x.setBalance(x.getBalance()+amount);
+				
 				return passiveTransactionProxy.updateAccount(x)
 												.doOnSuccess(y -> {
 													if(y.getId()!=null) {
@@ -53,7 +53,7 @@ public class PassiveTransactionServiceImpl implements PassiveTransactionService{
 				return passiveTransactionProxy.updateAccount(x)
 												.doOnSuccess(y -> {
 													if(y.getId()!=null) {
-														saveHistory(y.getId(), "withdraw form account", amount);
+														saveHistory(y.getId(), "withdraw from account", amount);
 													}
 												});
 			}else {
@@ -61,6 +61,41 @@ public class PassiveTransactionServiceImpl implements PassiveTransactionService{
 			}
 		});
 	}
+	
+	@Override
+	public Mono<Account> transferToAccount(String idAccountFrom, String idAccountTo, Double amount) {
+		
+		Mono<Account> accountFrom = passiveTransactionProxy.getAccount(idAccountFrom);
+		Mono<Account> accountTo = passiveTransactionProxy.getAccount(idAccountTo);
+		
+		return accountFrom.flatMap(monoAccountFrom -> {
+			if(monoAccountFrom.getMonthlyMovements()>0 && monoAccountFrom.getBalance()>=amount) {
+				monoAccountFrom.setMonthlyMovements(monoAccountFrom.getMonthlyMovements()-1);
+				monoAccountFrom.setBalance(monoAccountFrom.getBalance()-amount);
+				
+				accountTo.flatMap(monoAccountTo -> {
+					monoAccountTo.setBalance(monoAccountTo.getBalance()+amount);
+					
+					return passiveTransactionProxy.updateAccount(monoAccountTo)
+													.doOnSuccess(updatedAccountTo -> {
+														if(updatedAccountTo.getId()!=null) {
+															saveHistory(updatedAccountTo.getId(), "transfer from: "+idAccountFrom, amount);
+														}
+													});
+				}).subscribe();
+				
+				return passiveTransactionProxy.updateAccount(monoAccountFrom)
+												.doOnSuccess(updatedAccountFrom -> {
+													if(updatedAccountFrom.getId()!=null) {
+														saveHistory(updatedAccountFrom.getId(), "transfer to: "+idAccountTo, amount);
+													}
+												});
+			}else {
+				return Mono.empty();
+			}
+		});
+	}
+	
 	
 	public void saveHistory(String idProduct,
 							String type,
@@ -73,5 +108,7 @@ public class PassiveTransactionServiceImpl implements PassiveTransactionService{
 		
 		passiveTransactionProxy.saveHistory(history);
 
-	}	
+	}
+	
+
 }

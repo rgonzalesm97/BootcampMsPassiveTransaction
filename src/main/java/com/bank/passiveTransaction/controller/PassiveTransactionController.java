@@ -35,4 +35,13 @@ public class PassiveTransactionController {
 		
 	}
 	
+	@PostMapping("/transfer/{idFrom}/{idTo}")
+	public Mono<Account> transferTo(@PathVariable("idFrom") String idProductFrom,
+									@PathVariable("idTo") String idProductTo,
+									@RequestParam Double amount) {
+		
+		return passiveTransactionService.transferToAccount(idProductFrom, idProductTo, amount).switchIfEmpty(Mono.just(new Account()));
+
+	}
+	
 }
