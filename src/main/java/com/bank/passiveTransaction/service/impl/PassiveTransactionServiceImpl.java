@@ -22,7 +22,7 @@ public class PassiveTransactionServiceImpl implements PassiveTransactionService{
 	public Mono<History> depositIntoAccount(String idAccount, Double amount) {
 		
 		return passiveTransactionProxy.getAccount(idAccount)
-									  .flatMap(this::checkMonthlyMovements)
+									  .flatMap(resp->checkMonthlyMovements(resp, amount))
 									  .flatMap(resp->deposit(resp, amount))
 									  .flatMap(passiveTransactionProxy::updateAccount)
 									  .flatMap(resp->saveHistory(idAccount, "deposit", amount, null));
@@ -34,7 +34,7 @@ public class PassiveTransactionServiceImpl implements PassiveTransactionService{
 		
 		return passiveTransactionProxy.getAccount(idAccount)
 									  .flatMap(resp->checkBalance(resp, amount))
-									  .flatMap(this::checkMonthlyMovements)
+									  .flatMap(resp->checkMonthlyMovements(resp, amount))
 									  .flatMap(resp->withdraw(resp, amount))
 									  .flatMap(passiveTransactionProxy::updateAccount)
 									  .flatMap(resp->saveHistory(idAccount, "withdraw", amount, null));
@@ -43,61 +43,12 @@ public class PassiveTransactionServiceImpl implements PassiveTransactionService{
 	
 	@Override
 	public Mono<History> transferToAccount(String idAccountFrom, String idAccountTo, Double amount) {
-		return Mono.empty();
-//		Mono<Account> accountFrom = passiveTransactionProxy.getAccount(idAccountFrom);
-//		Mono<Account> accountTo = passiveTransactionProxy.getAccount(idAccountTo);
-//		
-//		return accountFrom.flatMap(monoAccountFrom -> {
-//			if(monoAccountFrom.getMonthlyMovements()<=0 && monoAccountFrom.getBalance()<amount+monoAccountFrom.getCommission()) return Mono.empty();
-//			
-//			if(monoAccountFrom.getMonthlyMovements()>0 && monoAccountFrom.getBalance()>=amount) {
-//				monoAccountFrom.setMonthlyMovements(monoAccountFrom.getMonthlyMovements()-1);
-//				monoAccountFrom.setBalance(monoAccountFrom.getBalance()-amount);
-//				
-//				accountTo.flatMap(monoAccountTo -> {
-//					monoAccountTo.setBalance(monoAccountTo.getBalance()+amount);
-//					
-//					return passiveTransactionProxy.updateAccount(monoAccountTo)
-//													.doOnSuccess(updatedAccountTo -> {
-//														if(updatedAccountTo.getId()!=null) {
-//															saveHistory(updatedAccountTo.getId(), "transfer from: "+idAccountFrom, amount);
-//														}
-//													});
-//				}).subscribe();
-//				
-//				return passiveTransactionProxy.updateAccount(monoAccountFrom)
-//												.doOnSuccess(updatedAccountFrom -> {
-//													if(updatedAccountFrom.getId()!=null) {
-//														saveHistory(updatedAccountFrom.getId(), "transfer to: "+idAccountTo, amount);
-//													}
-//												});
-//			}else if(monoAccountFrom.getBalance()>=amount+monoAccountFrom.getCommission()){
-//				monoAccountFrom.setBalance(monoAccountFrom.getBalance()-amount-monoAccountFrom.getCommission());
-//				
-//				accountTo.flatMap(monoAccountTo -> {
-//					monoAccountTo.setBalance(monoAccountTo.getBalance()+amount);
-//					
-//					return passiveTransactionProxy.updateAccount(monoAccountTo)
-//													.doOnSuccess(updatedAccountTo -> {
-//														if(updatedAccountTo.getId()!=null) {
-//															saveHistory(updatedAccountTo.getId(), "transfered from: "+idAccountFrom, amount);
-//														}
-//													});
-//				}).subscribe();
-//				
-//				return passiveTransactionProxy.updateAccount(monoAccountFrom)
-//												.doOnSuccess(updatedAccountFrom -> {
-//													if(updatedAccountFrom.getId()!=null) {
-//														saveHistory(updatedAccountFrom.getId(), "transfer to: "+idAccountTo, amount);
-//														saveHistory(updatedAccountFrom.getId(), "commission", updatedAccountFrom.getCommission());
-//													}
-//												});
-//			}else {
-//				return Mono.empty();
-//			}
-//		});
+		
+		return passiveTransactionProxy.getAccount(idAccountFrom)
+									  .flatMap(resp->checkBalance(resp, amount))
+									  .flatMap(resp->checkMonthlyMovements(resp, amount))
+									  .flatMap(resp->makeTransaction(resp, idAccountTo, amount));
 	}
-	
 	
 	
 	//TRANSACTIONS UTIL METHODS
@@ -116,7 +67,7 @@ public class PassiveTransactionServiceImpl implements PassiveTransactionService{
 		return Mono.just(account);
 	}
 	
-	public Mono<Account> checkMonthlyMovements(Account account){		
+	public Mono<Account> checkMonthlyMovements(Account account, Double amount){		
 		
 		Integer movements = account.getMonthlyMovements();
 		
@@ -124,8 +75,24 @@ public class PassiveTransactionServiceImpl implements PassiveTransactionService{
 			account.setMonthlyMovements(movements-1);
 			return Mono.just(account);
 		}else {
-			return Mono.error(()->new IllegalArgumentException("Not movements available"));
+			if(account.getBalance()>amount+account.getCommission()) {
+				account.setBalance(account.getBalance()-account.getCommission());
+				saveHistory(account.getId(), "commission", account.getCommission(), null).subscribe();
+				return Mono.just(account);
+			}else {
+				return Mono.error(() -> new IllegalArgumentException("Not enough balance"));
+			}
 		}
+	}
+	
+	public Mono<History> makeTransaction(Account accountFrom, String idAccountTo, Double amount){
+		return passiveTransactionProxy.getAccount(idAccountTo)
+								      .flatMap(accountTo->deposit(accountTo, amount))
+								      .flatMap(passiveTransactionProxy::updateAccount)
+								      .flatMap(accountTo->withdraw(accountFrom, amount))
+								      .flatMap(passiveTransactionProxy::updateAccount)
+								      .flatMap(resp->saveHistory(idAccountTo, "transfer from", amount, accountFrom.getId()))
+								      .flatMap(resp->saveHistory(accountFrom.getId(), "transfer to", amount, idAccountTo));
 	}
 	
 	public Mono<History> saveHistory(String idProduct,
