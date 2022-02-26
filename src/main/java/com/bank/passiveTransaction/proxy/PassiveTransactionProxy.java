@@ -31,14 +31,13 @@ public class PassiveTransactionProxy {
 				.bodyToMono(Account.class);
 	}
 	
-	public void saveHistory(History history) {
-		webClientBuilder.build()
+	public Mono<History> saveHistory(History history) {
+		return webClientBuilder.build()
 						.post()
 						.uri("http://localhost:8090/history")
 						.contentType(MediaType.APPLICATION_JSON)
 						.body(BodyInserters.fromValue(history))
 						.retrieve()
-						.bodyToMono(History.class)
-						.subscribe();
+						.bodyToMono(History.class);
 	}
 }
